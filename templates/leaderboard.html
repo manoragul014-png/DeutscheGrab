@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Leaderboard - DeutscheGrab{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card shadow-sm card-rounded">
+      <div class="card-body">
+        <h2 class="h4 mb-3">Leaderboard</h2>
+        <p class="text-muted">Ranked by total points (harder levels give more points).</p>
+        <table class="table table-striped align-middle">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>User</th>
+              <th>Points</th>
+              <th>Questions solved</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in users %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td>{{ u.username }}</td>
+              <td>{{ u.total_points }}</td>
+              <td>{{ u.total_questions }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="4" class="text-center text-muted">No users yet.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

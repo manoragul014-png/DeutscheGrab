@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Test Result - DeutscheGrab{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <h2>Test Results</h2>
+        <p class="lead">Score: <strong>{{ score }}%</strong></p>
+        <p>Total: {{ total }}, Correct: {{ correct }}, Wrong: {{ total - correct }}</p>
+
+        <a href="{{ url_for('test') }}" class="btn btn-primary mb-3">Retake Test</a>
+        <a href="{{ url_for('learn') }}" class="btn btn-secondary mb-3">Back to Learning</a>
+
+        <h4 class="mt-4">Review</h4>
+        <ul class="list-group">
+            {% for r in results %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                {% if r.mode == 'de-en' %}
+                    German: {{ r.word.german_word }} → {{ r.word.english_meaning }}
+                {% else %}
+                    English: {{ r.word.english_meaning }} → {{ r.word.german_word }}
+                {% endif %}
+                <span class="badge {% if r.is_correct %}bg-success{% else %}bg-danger{% endif %}">
+                    {% if r.is_correct %}Correct{% else %}Wrong{% endif %}
+                </span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endblock %}

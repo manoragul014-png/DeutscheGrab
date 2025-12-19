@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - DeutscheGrab{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card card-rounded shadow-sm mb-4">
+            <div class="card-body">
+                <h1 class="h3 mb-2">Welcome to DeutscheGrab</h1>
+                <p class="text-muted mb-3">
+                    Adaptive German vocabulary trainer using your curated CSV and a simple ML model.
+                </p>
+                <div class="row text-center">
+                    <div class="col-md-4 mb-3">
+                        <div class="stat-card bg-light p-3">
+                            <div class="text-muted small">Total words</div>
+                            <div class="h4 mb-0">{{ total_words }}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="stat-card bg-light p-3">
+                            <div class="text-muted small">Total attempts</div>
+                            <div class="h4 mb-0">{{ total_attempts }}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="stat-card bg-light p-3">
+                            <div class="text-muted small">Overall accuracy</div>
+                            <div class="h4 mb-0">{{ accuracy }}%</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex gap-3 mt-3">
+                    <a href="{{ url_for('learn') }}" class="btn btn-primary btn-lg">
+                        Start learning
+                    </a>
+                    <a href="{{ url_for('test') }}" class="btn btn-outline-success btn-lg">
+                        5‑minute test
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="card card-rounded shadow-sm">
+            <div class="card-body">
+                <h2 class="h5 mb-3">How DeutscheGrab works</h2>
+                <ul class="mb-0">
+                    <li>Words are loaded from a fixed CSV file with levels and gender codes.</li>
+                    <li>Learning mode mixes German→English and English→German with gender/article focus.</li>
+                    <li>The app tracks your attempts and uses a simple ML model to prioritise weak words.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

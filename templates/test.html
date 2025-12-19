@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}5-Min Test - DeutscheGrab{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-10 mx-auto">
+        <h2 class="mb-3">⏱️ 5‑Minute Test</h2>
+        <p class="text-muted">Answer as many as you can before time runs out.</p>
+
+        <div class="alert alert-info">
+            Time remaining: <span id="timer">05:00</span>
+        </div>
+
+        <form method="post" id="test-form">
+            <input type="hidden" name="total" value="{{ questions|length }}">
+            <input type="hidden" id="start_time" value="{{ start_time }}">
+            <input type="hidden" id="duration" value="{{ duration_seconds }}">
+
+            {% for q in questions %}
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5>Question {{ loop.index }}</h5>
+                    <input type="hidden" name="q{{ loop.index0 }}_id" value="{{ q.id }}">
+                    <input type="hidden" name="q{{ loop.index0 }}_mode" value="{{ q.mode }}">
+
+                    {% if q.mode == "de-en" %}
+                    <p><strong>German:</strong> ___ {{ q.german_word }}</p>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label class="form-label">Gender</label>
+                            <select name="q{{ loop.index0 }}_gender" class="form-select" required>
+                                <option value="">Select</option>
+                                <option value="0">Masculine (der)</option>
+                                <option value="1">Feminine (die)</option>
+                                <option value="2">Neutral (das)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">English meaning</label>
+                            <input name="q{{ loop.index0 }}_english" class="form-control" required>
+                        </div>
+                    </div>
+                    {% else %}
+                    <p><strong>English:</strong> {{ q.english_meaning }}</p>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label class="form-label">Article</label>
+                            <select name="q{{ loop.index0 }}_article" class="form-select" required>
+                                <option value="">Select</option>
+                                <option value="der">der</option>
+                                <option value="die">die</option>
+                                <option value="das">das</option>
+                            </select>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">German word</label>
+                            <input name="q{{ loop.index0 }}_german" class="form-control" required>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+
+            <button class="btn btn-success btn-lg mb-4" type="submit">
+                Submit Test
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+    const duration = parseInt(document.getElementById('duration').value, 10);
+    let remaining = duration;
+
+    function updateTimer() {
+        const minutes = String(Math.floor(remaining / 60)).padStart(2, '0');
+        const seconds = String(remaining % 60).padStart(2, '0');
+        document.getElementById('timer').innerText = minutes + ':' + seconds;
+
+        if (remaining <= 0) {
+            document.getElementById('test-form').submit();
+        } else {
+            remaining -= 1;
+            setTimeout(updateTimer, 1000);
+        }
+    }
+
+    updateTimer();
+</script>
+{% endblock %}
