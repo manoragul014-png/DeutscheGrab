@@ -1,0 +1,13 @@
+
+services:
+  web:
+    build: .
+    ports:
+      - "5001:5001"
+    volumes:
+      - .:/app
+      - ./data:/app/data
+    environment:
+      - SECRET_KEY=your_secret_key_here
+      - DATABASE_URL=sqlite:///data/deutschegrab.db
+    restart: always

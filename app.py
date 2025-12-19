@@ -152,7 +152,7 @@ def train_ml_model() -> None:
     if not progresses:
         return
 
-    X, y = []
+    X, y = [], []
 
     for prog in progresses:
         word = Vocabulary.query.get(prog.vocab_id)
@@ -181,7 +181,8 @@ def get_adaptive_words(level: str, count: int = 10) -> List[Vocabulary]:
     scored_words = []
 
     for word in words:
-        progress = UserProgress.query.filter_by(user_id=1, vocab_id=word.id).first()
+        user_id = session.get("user_id", 1)
+        progress = UserProgress.query.filter_by(user_id=user_id, vocab_id=word.id).first()
         forget_prob = ml_model.predict_forget_prob(word, progress)
         scored_words.append((word, forget_prob))
 
@@ -295,6 +296,11 @@ def create_app() -> Flask:
     # ---------------- Learn Route ---------------- #
     @app.route("/learn", methods=["GET", "POST"])
     def learn():
+        current = get_current_user()
+        if not current:
+            flash("Please log in to practice.", "warning")
+            return redirect(url_for("login"))
+
         mode = request.args.get("mode", "de-en")
         level = request.args.get("level", "A1")
 
@@ -309,11 +315,7 @@ def create_app() -> Flask:
 
         feedback = None
         is_correct = None
-
-        user_gender = ""
-        user_article = ""
-        user_german = ""
-        user_english = ""
+        user_gender = user_article = user_german = user_english = ""
 
         action = request.form.get("action")
 
@@ -337,54 +339,43 @@ def create_app() -> Flask:
                 f"Wrong. Correct: {correct_article} {word.german_word} = {word.english_meaning}"
             )
 
-            # Update progress and points
-            current = get_current_user()
-            user_id = current.id if current else 1  # fallback for demo
+            # --- FIXED: Safety Check for UserProgress ---
+            user_id = current.id
             progress = UserProgress.query.filter_by(user_id=user_id, vocab_id=word.id).first()
-            if not progress:
-                progress = UserProgress(user_id=user_id, vocab_id=word.id)
+            if progress is None:
+                progress = UserProgress(user_id=user_id, vocab_id=word.id, attempts=0, correct=0)
                 db.session.add(progress)
+                db.session.flush() # Ensure it has an ID before updating
 
             progress.attempts += 1
             if is_correct:
                 progress.correct += 1
+                pts = difficulty_points(word.difficulty)
+                current.total_points += pts
 
+            current.total_questions += 1
             progress.mastery_score = progress.correct / max(progress.attempts, 1)
             progress.last_attempt = datetime.utcnow()
-
-            if is_correct:
-                pts = difficulty_points(word.difficulty)
-                user = User.query.get(user_id)
-                if user:
-                    user.total_points += pts
-                    user.total_questions += 1
-            else:
-                user = User.query.get(user_id)
-                if user:
-                    user.total_questions += 1
+            db.session.commit()
 
         elif request.method == "POST" and action == "next":
             word = Vocabulary.query.filter_by(difficulty=level).order_by(func.random()).first()
-            user_gender = user_article = user_german = user_english = ""
-
-        db.session.commit()
 
         return render_template(
             "learn.html",
-            word=word,
-            mode=mode,
-            level=level,
-            feedback=feedback,
-            is_correct=is_correct,
-            user_gender=user_gender,
-            user_article=user_article,
-            user_german=user_german,
-            user_english=user_english,
+            word=word, mode=mode, level=level,
+            feedback=feedback, is_correct=is_correct,
+            user_gender=user_gender, user_article=user_article,
+            user_german=user_german, user_english=user_english,
         )
 
     # ---------------- API /check ---------------- #
     @app.route("/api/check", methods=["POST"])
     def check_answer():
+        current = get_current_user()
+        if not current:
+            return jsonify({"correct": False, "message": "Login required"}), 401
+
         data = request.json or {}
         word_id = data.get("word_id")
         word = Vocabulary.query.get(word_id)
@@ -393,57 +384,33 @@ def create_app() -> Flask:
 
         user_article = str(data.get("article", "")).strip().lower()
         user_answer = str(data.get("answer", "")).strip().lower()
-        user_gender = str(data.get("gender", "")).strip()
+        is_correct = user_article == (word.article or "").lower() and user_answer == (word.english_meaning or "").lower()
 
-        correct_article = (word.article or "").lower()
-        correct_answer = (word.english_meaning or "").lower()
-        correct_gender = str(word.gender_code)
-
-        is_correct = user_article == correct_article and user_answer == correct_answer
-
-        current = get_current_user()
-        user_id = current.id if current else 1  # fallback for demo
-
+        # Update word totals
         word.attempts += 1
-        if is_correct:
-            word.correct += 1
+        if is_correct: word.correct += 1
 
-        progress = UserProgress.query.filter_by(user_id=user_id, vocab_id=word.id).first()
-        if not progress:
-            progress = UserProgress(user_id=user_id, vocab_id=word.id)
+        # --- FIXED: Safety Check for UserProgress ---
+        progress = UserProgress.query.filter_by(user_id=current.id, vocab_id=word.id).first()
+        if progress is None:
+            progress = UserProgress(user_id=current.id, vocab_id=word.id, attempts=0, correct=0)
             db.session.add(progress)
+            db.session.flush()
 
         progress.attempts += 1
         if is_correct:
             progress.correct += 1
-
+            current.total_points += difficulty_points(word.difficulty)
+        
+        current.total_questions += 1
         progress.mastery_score = progress.correct / max(progress.attempts, 1)
         progress.last_attempt = datetime.utcnow()
-
-        if is_correct:
-            pts = difficulty_points(word.difficulty)
-            user = User.query.get(user_id)
-            if user:
-                user.total_points += pts
-                user.total_questions += 1
-        else:
-            user = User.query.get(user_id)
-            if user:
-                user.total_questions += 1
-
         db.session.commit()
 
         if progress.attempts % 20 == 0:
             train_ml_model()
 
-        return jsonify({
-            "correct": is_correct,
-            "correct_article": word.article,
-            "correct_answer": word.english_meaning,
-            "correct_gender": correct_gender,
-            "example": word.example_sentence or "",
-            "message": "Perfect!" if is_correct else "Try again!",
-        })
+        return jsonify({"correct": is_correct, "message": "Perfect!" if is_correct else "Try again!"})
 
     # ---------------- Leaderboard ---------------- #
     @app.route("/leaderboard")
@@ -454,94 +421,62 @@ def create_app() -> Flask:
     # ---------------- Test ---------------- #
     @app.route("/test", methods=["GET", "POST"])
     def test():
+        current = get_current_user()
+        if not current:
+            flash("Please log in to take a test.", "warning")
+            return redirect(url_for("login"))
+
         if request.method == "GET":
             level = request.args.get("level", "A1")
             pool = get_adaptive_words(level, count=30) if ml_model.is_trained else Vocabulary.query.filter_by(difficulty=level).all()
             words = random.sample(pool, min(15, len(pool)))
-
-            questions = []
-            for word in words:
-                mode = random.choice(["de-en", "en-de"])
-                questions.append({
-                    "id": word.id,
-                    "mode": mode,
-                    "german_word": word.german_word,
-                    "english_meaning": word.english_meaning,
-                    "article": word.article,
-                    "gender_code": word.gender_code,
-                })
-
-            start_time = datetime.utcnow().isoformat()
-            return render_template("test.html", questions=questions, start_time=start_time, duration_seconds=300, level=level)
+            questions = [{
+                "id": w.id, "mode": random.choice(["de-en", "en-de"]),
+                "german_word": w.german_word, "english_meaning": w.english_meaning,
+                "article": w.article, "gender_code": w.gender_code
+            } for w in words]
+            return render_template("test.html", questions=questions, start_time=datetime.utcnow().isoformat(), duration_seconds=300, level=level)
 
         total = int(request.form.get("total", 0))
         correct_count = 0
         results = []
 
-        current = get_current_user()
-        user_id = current.id if current else 1  # fallback for demo
-
         for index in range(total):
             prefix = f"q{index}_"
             vocab_id = int(request.form.get(prefix + "id"))
-            mode = request.form.get(prefix + "mode")
-
-            user_gender = request.form.get(prefix + "gender", "").strip()
-            user_article = request.form.get(prefix + "article", "").strip().lower()
-            user_german = request.form.get(prefix + "german", "").strip().lower()
-            user_english = request.form.get(prefix + "english", "").strip().lower()
-
             word = Vocabulary.query.get(vocab_id)
-            if word is None:
-                continue
+            if not word: continue
 
-            correct_gender = str(word.gender_code)
-            correct_article = (word.article or "").strip().lower()
-            correct_german = (word.german_word or "").strip().lower()
-            correct_english = (word.english_meaning or "").strip().lower()
-
+            mode = request.form.get(prefix + "mode")
             if mode == "de-en":
-                is_correct = user_gender == correct_gender and user_english == correct_english
+                is_correct = (request.form.get(prefix + "gender") == str(word.gender_code) and 
+                              request.form.get(prefix + "english", "").strip().lower() == word.english_meaning.lower())
             else:
-                is_correct = user_article == correct_article and user_german == correct_german
+                is_correct = (request.form.get(prefix + "article", "").strip().lower() == word.article.lower() and 
+                              request.form.get(prefix + "german", "").strip().lower() == word.german_word.lower())
 
-            if is_correct:
-                correct_count += 1
+            if is_correct: correct_count += 1
 
-            progress = UserProgress.query.filter_by(user_id=user_id, vocab_id=word.id).first()
-            if not progress:
-                progress = UserProgress(user_id=user_id, vocab_id=word.id, attempts=0, correct=0)
+            # --- FIXED: Safety Check for UserProgress in Test Loop ---
+            progress = UserProgress.query.filter_by(user_id=current.id, vocab_id=word.id).first()
+            if progress is None:
+                progress = UserProgress(user_id=current.id, vocab_id=word.id, attempts=0, correct=0)
                 db.session.add(progress)
+                db.session.flush()
 
             progress.attempts += 1
             if is_correct:
                 progress.correct += 1
-
-                # award points
-                pts = difficulty_points(word.difficulty)
-                user = User.query.get(user_id)
-                if user:
-                    user.total_points += pts
-                    user.total_questions += 1
-            else:
-                user = User.query.get(user_id)
-                if user:
-                    user.total_questions += 1
-
+                current.total_points += difficulty_points(word.difficulty)
+            
+            current.total_questions += 1
             results.append({"word": word, "mode": mode, "is_correct": is_correct})
 
         db.session.commit()
-
-        total_attempts = db.session.query(func.count(UserProgress.id)).scalar()
-        if total_attempts % 50 == 0:
-            train_ml_model()
-
-        score_percent = round((correct_count / max(total, 1)) * 100.0, 1)
-
-        return render_template("test_result.html", total=total, correct=correct_count, score=score_percent, results=results)
+        return render_template("test_result.html", total=total, correct=correct_count, score=round((correct_count/max(total,1))*100,1), results=results)
 
     return app
 
 if __name__ == "__main__":
     APP = create_app()
-    APP.run(debug=True, host="0.0.0.0", port=5000)
+    APP.run(debug=True, host="0.0.0.0", port=5001)
