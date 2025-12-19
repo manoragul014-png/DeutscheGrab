@@ -15,6 +15,7 @@ DeutscheGrab is a Flask-based web application designed to help users master Germ
     - Columns: `article`, `german_word`, `english_meaning`, `example_sentence`,
       `category`, `difficulty`, `gender_code`.
 
+![DeutscheGrab Project Overview](assets/banner.png)
 
 - **Learning modes**
   - German → English:
